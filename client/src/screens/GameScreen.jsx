@@ -31,6 +31,9 @@ export default function GameScreen({ myId, roomCode, playerList: initialList }) 
   const [mySolved, setMySolved]          = useState(false);
   const [myEliminated, setMyEliminated]  = useState(false);
   const toastId = useRef(0);
+  // Ref so socket handlers (registered once) always read the latest row
+  const currentRowRef = useRef(0);
+  useEffect(() => { currentRowRef.current = currentRow; }, [currentRow]);
 
   const inputBlocked = mySolved || myEliminated || submitting;
 
@@ -91,8 +94,10 @@ export default function GameScreen({ myId, roomCode, playerList: initialList }) 
 
     socket.on('guess_error', ({ message }) => {
       setSubmitting(false);
-      // shake uses currentRow captured in handler — use functional update to get latest
-      setCurrentRow(row => { setShakingRow(row); setTimeout(() => setShakingRow(null), 600); return row; });
+      // Use ref so we always shake the correct (current) row
+      const row = currentRowRef.current;
+      setShakingRow(row);
+      setTimeout(() => setShakingRow(null), 600);
       addToast(message, 'error');
     });
 
@@ -114,31 +119,31 @@ export default function GameScreen({ myId, roomCode, playerList: initialList }) 
       return;
     }
     if (key === 'ENTER') {
-      setCurrentRow(row => {
-        if (currentInput.length !== WORD_LENGTH) {
-          setShakingRow(row);
-          setTimeout(() => setShakingRow(null), 600);
-          addToast('Not enough letters', 'error');
-          return row;
+      // FIX: Do NOT use setCurrentRow(fn) here — React Strict Mode calls updater fns
+      // twice in dev, which would invoke socket.emit twice (double submission bug).
+      // Use currentRow directly from the closure instead.
+      if (currentInput.length !== WORD_LENGTH) {
+        setShakingRow(currentRow);
+        setTimeout(() => setShakingRow(null), 600);
+        addToast('Not enough letters', 'error');
+        return;
+      }
+      // Mark current row as pending (hides letters until server responds)
+      setGrid(prev => {
+        const next = prev.map(r => r.map(c => ({ ...c })));
+        for (let i = 0; i < WORD_LENGTH; i++) {
+          next[currentRow][i] = { letter: currentInput[i], status: '', cellState: 'pending' };
         }
-        // Lock row: set to pending (hides letters visually)
-        setGrid(prev => {
-          const next = prev.map(r => r.map(c => ({ ...c })));
-          for (let i = 0; i < WORD_LENGTH; i++) {
-            next[row][i] = { letter: currentInput[i], status: '', cellState: 'pending' };
-          }
-          return next;
-        });
-        setSubmitting(true);
-        socket.emit('submit_guess', { guess: currentInput });
-        return row; // actual increment happens via setCurrentRow(attempts) in guess_result
+        return next;
       });
+      setSubmitting(true);
+      socket.emit('submit_guess', { guess: currentInput }); // called exactly once
       return;
     }
     if (/^[A-Z]$/.test(key) && currentInput.length < WORD_LENGTH) {
       setCurrentInput(prev => prev + key);
     }
-  }, [inputBlocked, currentInput, addToast]);
+  }, [inputBlocked, currentInput, currentRow, addToast]);
 
   // Physical keyboard
   useEffect(() => {
