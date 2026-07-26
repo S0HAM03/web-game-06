@@ -128,7 +128,7 @@ function startGame(socketId) {
   const room = getRoomBySocket(socketId);
   if (!room) return { success: false, message: 'Room not found.' };
   if (room.hostId !== socketId) return { success: false, message: 'Only the host can start the game.' };
-  if (room.players.length < 2) return { success: false, message: 'Need at least 2 players to start.' };
+  if (room.players.length < 1) return { success: false, message: 'No players in room.' };
   if (room.status !== 'waiting') return { success: false, message: 'Game already started.' };
 
   room.word = getRandomWord();
