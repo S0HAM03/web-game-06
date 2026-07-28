@@ -200,12 +200,14 @@ async function initWords() {
   const allGuesses = [...fetchedGuesses, ...UNIQUE_ANSWERS];
   VALID_GUESSES = new Set(allGuesses.map(w => w.toLowerCase()));
 
-  // Build answer list: fetched answers (exclude easy) + built-in
+  // Build answer list: full NYT answers (easy + medium) + common words
+  // We intentionally include easy/common words for a fun, accessible difficulty
   const curated = fetchedAnswers.length > 0
-    ? fetchedAnswers.filter(w => !EASY_SET.has(w))
+    ? fetchedAnswers  // use ALL fetched answers, no difficulty filter
     : [];
-  
-  const combined = [...new Set([...UNIQUE_ANSWERS, ...curated])];
+
+  const easyWords = [...EASY_SET]; // also include the common words as valid answers
+  const combined = [...new Set([...easyWords, ...curated, ...UNIQUE_ANSWERS])];
   WORD_LIST = combined.filter(w => /^[a-z]{5}$/.test(w));
 
   console.log(`[WORDS] Final: ${WORD_LIST.length} answer words, ${VALID_GUESSES.size} valid guesses`);
